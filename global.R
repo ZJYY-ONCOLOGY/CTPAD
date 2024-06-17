@@ -40,6 +40,10 @@ library(tidyr)
 library(corrplot)
 library(ggcorrplot)
 library(emayili)
+library(colourpicker)
+library(dplyr)
+library(Seurat)
+library(patchwork)
 #library(nycflights13)#spinner
 options(scipen=999)
 
@@ -63,6 +67,13 @@ data<-read.table("./data/data.txt")
 geochoices<-data.frame(geo=data$names,GSE=rownames(data))
 geolist <- as.list(geochoices$GSE)
 names(geolist) <- geochoices$geo
+
+scgeo<-c("GSE180885","GSE153760","GSE158432","GSE213849_AD")
+scname<-c("Atopic dermatitis_GSE180885","Atopic dermatitis_GSE153760",
+          "Atopic dermatitis_GSE158432","Atopic dermatitis_GSE213849_AD")
+scchoices<-data.frame(scgeo,scname)
+sclist<-as.list(scchoices$scgeo)
+names(sclist)<-scchoices$scname
 
 title<-read.table("./data/Group/group.txt",header=T,row.names=1)
 annogeneset<-c("H: hallmark gene sets"="H",
@@ -131,7 +142,7 @@ create_theme(
   output_file = "www/mytheme.css"
 )
 
-
+load("./updated_46_diseaselist_input.Rdata")
 
 # 自定义函数 -------------------------------------------------------------------
 
@@ -140,7 +151,9 @@ create_theme(
 # 火山图 ---------------------------------------------------------------------
 
 
-my_volcano<-function(dataset,log2FC_cutoff,P.Value_cutoff,topgenes){
+my_volcano<-function(dataset,customize=T,
+                     topgenes=NULL,customizegenes=NULL,
+                     log2FC_cutoff,P.Value_cutoff,color1,color2){
   title<-read.table("./data/Group/group.txt",header=T,row.names=1)
   load(paste("./data/DEG/",dataset,"_deg.Rdata",sep = ""))
   
@@ -150,13 +163,19 @@ my_volcano<-function(dataset,log2FC_cutoff,P.Value_cutoff,topgenes){
                          levels=c('Up','Down','Not Sig'))
   deg$gene <- row.names(deg) #添加一列基因名，以便备注
   deg<-deg[order(deg$logFC),]
+  
+  if(customize == T){
+    topgenes<-customizegenes
+  }else{
+    topgenes<-c(head(rownames(deg),n=topgenes),tail(rownames(deg),n=topgenes))
+  }
+  
   ggplot(deg,aes(x=logFC,y=-log10(P.Value),color=threshold))+
     geom_point(data = deg[deg$P.Value<P.Value_cutoff&abs(deg$logFC)>log2FC_cutoff,],size = 2.5)+
     geom_point(data = deg[deg$P.Value>P.Value_cutoff|abs(deg$logFC)<log2FC_cutoff,],size = 2.5)+
-    scale_color_manual(values=c("#b8dafc","#d2dae2","#ff9999"))+#确定点的颜色
+    scale_color_manual(values=c(color1,"#d2dae2",color2))+#确定点的颜色
     geom_text_repel(#添加关注的点的基因名
-      data = deg[c(head(rownames(deg),n=topgenes),
-                   tail(rownames(deg),n=topgenes)),],
+      data = deg[topgenes,],#data = deg[c(head(rownames(deg),n=topgenes),tail(rownames(deg),n=topgenes)),],
       aes(label = gene),
       size = 3.5,
       color = "black",
@@ -207,7 +226,7 @@ my_volcano<-function(dataset,log2FC_cutoff,P.Value_cutoff,topgenes){
                                      vjust = 0.5,
                                      hjust = 0.5,
                                      angle = 0) ,
-          plot.title = element_text(size = 20,
+          plot.title = element_text(size = 15,
                                     face = "bold",
                                     color = "black",
                                     hjust = 0.5),
@@ -218,7 +237,9 @@ my_volcano<-function(dataset,log2FC_cutoff,P.Value_cutoff,topgenes){
 
 # 差异基因热图 ------------------------------------------------------------------
 
-my_heatmap<-function(dataset,log2FC_cutoff,customize=T,topgenes=NULL,customizegenes=NULL){
+my_heatmap<-function(dataset,log2FC_cutoff,customize=T,
+                     topgenes=NULL,customizegenes=NULL,
+                     color1,color2){
 load(paste("./data/DEG/",dataset,"_deg.Rdata",sep = ""))
 load(paste("./data/Exp/",dataset,"_exp.Rdata",sep = ""))
 group<-read.table(paste("./data/Group/",dataset,".txt",sep = ""),header=T,row.names=1)
@@ -260,9 +281,9 @@ rownames(htmatrix)<-deg_topgene$genename
 htmatrix<-as.matrix(htmatrix)
 
 htmatrix = t(apply(htmatrix, 1, scale))
-
+Htcolor<-c(color2, "white", color1)
   
-Ht<-Heatmap(htmatrix, col = colorRamp2(c(-2, 0, 2), c("#6ccfb2", "white", "#cf6c89")),
+Ht<-Heatmap(htmatrix, col = colorRamp2(c(-2, 0, 2), Htcolor),
             heatmap_legend_param = list(
               title = "expression (Z-score)"),
             top_annotation =HeatmapAnnotation(
@@ -314,7 +335,7 @@ enrich_dotplot<-function(dataset,geneset=NULL){
                                      from="description",
                                      to="Description")
     dotplot(gsea,showCategory =geneset,
-            title = paste("Dotplot for GSEA (",dataset,", ",grouptitle[dataset,],")",sep = ""),
+            title = paste("Dot plot for GSEA (",dataset,", ",grouptitle[dataset,],")",sep = ""),
             font.size = 10)+
       scale_color_continuous(low='#ff8080', high='#88c0fa')+
       theme(plot.title = element_text(hjust = 0.5,face = "bold",size=17))
@@ -328,7 +349,7 @@ my_ridgeplot<-function(gsea,dataset){
   
   enrichplot::ridgeplot(gsea,showCategory = 15,core_enrichment = T)+
     ggplot2::scale_fill_gradient(low='#ff9999', high='#b8dafc')+
-   ggplot2::ggtitle(paste("Ridgeline-plot (",dataset,", ",grouptitle[dataset,],")",sep = ""))+
+   ggplot2::ggtitle(paste("Ridgeline plot (",dataset,", ",grouptitle[dataset,],")",sep = ""))+
      ggplot2::theme(plot.title = element_text(hjust = 0.8,face = "bold",size=17),
      axis.text.x = element_text(size= 12),
      axis.text.y = element_text(size= 12))
@@ -376,7 +397,7 @@ mygseaplot<-function(gsea,id,dataset,topgene=T,genenum=25){
 
 # ssGSEA热图 ----------------------------------------------------------------
 
-myssgseaheatmap<-function(dataset,pathways=NULL){
+myssgseaheatmap<-function(dataset,pathways=NULL,color1,color2){
   load(paste("./Enrichment/ssgsea/",dataset,"_ssgseamat.Rdata",sep = ""))
   load(paste("./Enrichment/ssgsea/",dataset,"_ssgseapvalue.Rdata",sep = ""))
   
@@ -416,7 +437,7 @@ myssgseaheatmap<-function(dataset,pathways=NULL){
   
   
   Ht<-Heatmap(htmatrix,
-              col = colorRamp2(c(-2, 0, 2), c("#6ccfb2", "white", "#cf6c89")),
+              col = colorRamp2(c(-2, 0, 2), c(color2, "white", color1)),
               heatmap_legend_param = list(title = "enrichment score (Z-score)",
                                           direction = "horizontal"),
               top_annotation =HeatmapAnnotation(
@@ -464,7 +485,7 @@ mystackplot<-function(immunedata){
 
 # 免疫浸润热图 ------------------------------------------------------------------
 
-myimmuneheatmap<-function(dataset,algorithm){
+myimmuneheatmap<-function(dataset,algorithm,color1,color2){
   load(paste("./ImmuneInfiltration/",dataset,"_",algorithm,".Rdata",sep = ""))
   results<-as.data.frame(results)
   
@@ -494,10 +515,10 @@ myimmuneheatmap<-function(dataset,algorithm){
                                                   ifelse(results_name[i,"pvalue"]<0.05,"*"," "))))
   }
   results_name$name<-str_c(results_name$name,results_name$pvalue,sep = " ")
-  
+  Htcolor<-c(color2,"white",color1)
   if(algorithm=="xCell"){
     Ht<-Heatmap(results, 
-                col = colorRamp2(c(-2, 0, 2), c("#6ccfb2", "white", "#cf6c89")),
+                col = colorRamp2(c(-2, 0, 2), Htcolor),
                 heatmap_legend_param = list(title = "immune score (Z-score)",
                                             direction="horizontal"),
                 top_annotation =HeatmapAnnotation(
@@ -513,7 +534,7 @@ myimmuneheatmap<-function(dataset,algorithm){
     )
   }else{
   Ht<-Heatmap(results, 
-          col = colorRamp2(c(-2, 0, 2), c("#6ccfb2", "white", "#cf6c89")),
+          col = colorRamp2(c(-2, 0, 2), Htcolor),
           heatmap_legend_param = list(title = "immune score (Z-score)",
                                       direction="horizontal"),
           #heatmap_width = unit(14, "cm"), 
@@ -548,7 +569,7 @@ myimmuneheatmap<-function(dataset,algorithm){
 
 
 # 免疫浸润Boxplot-------------------------------------------------------------------------
-myimmuneboxplot<-function(dataset,algorithm){
+myimmuneboxplot<-function(dataset,algorithm,color1,color2){
   load(paste("./ImmuneInfiltration/",dataset,"_",algorithm,".Rdata",sep = ""))
   results_prop<- apply(results, 2, function(x){x/sum(x)})
   results_prop<-as.data.frame(results_prop)
@@ -574,7 +595,7 @@ myimmuneboxplot<-function(dataset,algorithm){
           panel.grid.minor = element_blank(),
           axis.text.x = element_text(angle=80,vjust = 1,hjust = 1),
           text = element_text(size = 15))+
-    scale_fill_manual(values = c("#006a4e","#a52a2a"))+
+    scale_fill_manual(values = c(color1,color2))+#values = c("#006a4e","#a52a2a")
     stat_compare_means(aes(group = group,label = ..p.signif..),
                        symnum.args = list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns")),
                        method = "wilcox.test"#kruskal.test
@@ -585,7 +606,7 @@ myimmuneboxplot<-function(dataset,algorithm){
 
 # 相关性散点图 ---------------------------------------------------------------------
 
-myscattergram<-function(dataset,x=NULL,y=NULL,variable,cor_group,method){
+myscattergram<-function(dataset,x=NULL,y=NULL,variable,cor_group,method,color1=NULL,color2=NULL,color3=NULL){
   
   load(paste("./data/Exp/",dataset,"_exp.Rdata",sep = ""))
   load(paste("./Enrichment/ssgsea/",dataset,"_ssgseamat.Rdata",sep = ""))
@@ -627,8 +648,8 @@ myscattergram<-function(dataset,x=NULL,y=NULL,variable,cor_group,method){
                   method = "lm",se = T, fullrange = T,level=0.2) +
       scale_shape_manual(values = c(17, 19))+
       geom_rug(aes(color = group),outside = T,sides = "tr",size = 1)+
-      scale_color_manual(values =c("#ca85ca", "#85ca85"))+
-      scale_fill_manual(values = c("#ca85ca", "#85ca85"))+ 
+      scale_color_manual(values =c(color1, color2))+#values =c("#ca85ca", "#85ca85")
+      scale_fill_manual(values = c(color1, color2))+#values =c("#ca85ca", "#85ca85")
       theme_bw() +
       coord_cartesian(clip = "off") +#让数据顶格
       theme(panel.grid.major = element_blank(), 
@@ -686,20 +707,26 @@ myscattergram<-function(dataset,x=NULL,y=NULL,variable,cor_group,method){
                  ifelse(variable=="gvg",
                         "(expression)","(ssGSEA)"),sep=""))+
       geom_smooth(color = "black",method = "lm",se = T, fullrange = T,level=0.2) +
-      geom_rug(color = "#ca85ca",outside = T,sides = "tr",size = 1)+
+      geom_rug(color = color3,outside = T,sides = "tr",size = 1)+#color = "#ca85ca"
       coord_cartesian(clip = "off") +#让数据顶格
       stat_cor(method = method,
                label.y.npc = 0.95,p.accuracy = 0.001,
                show.legend=F)+
+      ggtitle(paste(dataset," (",cor_group,") ",method, ", p-value",sep = ""))+
       theme_bw() +
       theme(panel.grid.major = element_blank(), 
             panel.grid.minor = element_blank(),
             text = element_text(size = 10),
             plot.margin = margin(1, 1, 1, 1, "cm"),
-            axis.title.x = element_text(size = 15,
+            plot.title = element_text(size = 12,
+                                      color = "black",
+                                      face = "bold",
+                                      vjust = 6,#标题向上移动，避免遮挡密度条
+                                      hjust = 0.5),#标题居中
+            axis.title.x = element_text(size = 12,
                                         color = "black",
                                         face = "plain"),
-            axis.title.y = element_text(size = 15,
+            axis.title.y = element_text(size = 12,
                                         color = "black",
                                         face = "plain"),
             axis.text.x = element_text(size = 11,  
@@ -722,7 +749,7 @@ myscattergram<-function(dataset,x=NULL,y=NULL,variable,cor_group,method){
 }
 
 
-# 相关性热图 -------------------------------------------------------------------
+# 相关性热图
 
 # mycorheatmap<-function(dataset,genes,Group,method){
 #   load(paste("./data/Exp/",dataset,"_exp.Rdata",sep = ""))
@@ -812,13 +839,13 @@ mycorbubble<-function(dataset,genes,Group,method){
   if(length(genes)<10){
   corrplot(corr =env.cor, p.mat = env.p,
            title=paste(dataset,"(",Group,") ",method, ", p-values",sep = ""),
-           mar=c(0,0,1,0),#为了标题在合适位置
+           mar=c(0,0,2,0),#为了标题在合适位置mar=c(0,0,1,0)
            method = "square",type = "upper",
            tl.pos="lt",tl.srt = 45,#坐标轴文字
            insig="label_sig",
            sig.level = c(.001, .01, .05),
            pch.cex = 1,diag=T,
-           tl.cex=1.3, tl.col="black",
+           tl.cex=1.2, tl.col="black",
            col = COL2("PRGn")
              #colorRampPalette(colors = c('#80fcfe', '#ff80fc'))(10)
   ) # 用*作为显著性标签，sig.level参数表示0.05用*表示。0.01用**。0.001用***。pch.cex = 0.8,用于设置显著性标签的字符大小。
@@ -829,7 +856,7 @@ mycorbubble<-function(dataset,genes,Group,method){
   }else if(length(genes)>=10 &&length(genes)<=15){
     corrplot(corr =env.cor, p.mat = env.p,
              title=paste(dataset,"(",Group,") ",method, ", p-values",sep = ""),
-             mar=c(0,0,1,0),#为了标题在合适位置
+             mar=c(0,0,1,0),#为了标题在合适位置mar=c(0,0,1,0),
              method = "square",type = "upper",
              tl.pos="lt",tl.srt = 45,#坐标轴文字
              insig="label_sig",
@@ -845,7 +872,7 @@ mycorbubble<-function(dataset,genes,Group,method){
 
   }else{
     corrplot(corr =env.cor, p.mat = env.p,
-             title=paste(dataset,"(",Group,") ",method, ", p-values",sep = ""),
+             title=paste(dataset," (",Group,") ",method, ", p-value",sep = ""),
              mar=c(0,0,1,0),#为了标题在合适位置
              method = "square",type = "upper",
              tl.pos="lt",tl.srt = 45,#坐标轴文字
