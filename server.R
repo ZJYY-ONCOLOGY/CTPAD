@@ -25,24 +25,47 @@ shinyServer(
 
     observe_helpers(withMathJax = TRUE)#helper的server端控制
   
-   
+    observeEvent(list(input$dataset2_1,input$Customize2_1==T),{
+      load(paste("./data/gene/",isolate(input$dataset2_1),"_gene.Rdata",sep = ""))
+      
+      updateSelectizeInput(
+        session,
+        inputId = "customize_genes2_1",
+        choices = gene$`gene symbol`,
+        selected = gene$`gene symbol`[1:5],
+        server = T
+      )
+    })
     
-    
-    observeEvent(input$dataset2_1, {
-      if (input$dataset2_1=='') {
+    observeEvent(list(input$dataset2_1,input$customize_genes2_1), {
+      if (length(input$customize_genes2_1) > 20) {
         showFeedbackDanger(
-          inputId = "dataset2_1",
-          text = "Please choose a dataset!",
+          inputId = "customize_genes2_1",
+          text = "Warning, please choose 1~20 gene symbol(s)!",
           color  =  "#d9534f" ,
           icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
         )
         shinyjs::disable("submit2_1")
-      } else {
-        hideFeedback("dataset2_1")
+        #showToast('error', 'Danger if > 20 genes')
+      } else if(length(input$customize_genes2_1) < 1){
+        showFeedbackDanger(
+          inputId = "customize_genes2_1",
+          text = "Warning, please choose 1~20 gene symbol(s)!",
+          color  =  "#d9534f" ,
+          icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+        )
+        shinyjs::disable("submit2_1")
+        #showToast('error', 'Danger if < 3 genes')
+      }
+      else if(length(input$customize_genes2_1)>=1 && length(input$customize_genes2_1) <= 20){
+        hideFeedback("customize_genes2_1")
+        #showToast('success', 'Success!')
         shinyjs::enable("submit2_1")
       }
       
     })
+    
+  
     
     observeEvent(input$markgeneN, {
       if(is.na(input$markgeneN)){
@@ -56,7 +79,7 @@ shinyServer(
       }else if (input$markgeneN > 10) {
         showFeedbackDanger(
           inputId = "markgeneN",
-          text = "The value must between 1~50",
+          text = "The value must between 1~10",
           color  =  "#d9534f" ,
           icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
         )
@@ -64,7 +87,7 @@ shinyServer(
       } else if(input$markgeneN < 1){
         showFeedbackDanger(
           inputId = "markgeneN",
-          text = "The value must between 1~50",
+          text = "The value must between 1~10",
           color  =  "#d9534f" ,
           icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
         )
@@ -78,10 +101,22 @@ shinyServer(
     
     
     volcano<-eventReactive(input$submit2_1,{
+      if(input$Customize2_1==T){
     my_volcano(input$dataset2_1,
-               as.numeric(input$log2FC1),
-               as.numeric(input$p.value),
-               as.numeric(input$markgeneN))
+               log2FC_cutoff=as.numeric(input$log2FC1),
+               P.Value_cutoff=as.numeric(input$p.value),
+               customizegenes=isolate(input$customize_genes2_1),
+               color1=input$color2_2_1,
+               color2=input$color1_2_1)
+      }else{
+        my_volcano(input$dataset2_1,
+                   customize=F,
+                   log2FC_cutoff=as.numeric(input$log2FC1),
+                   P.Value_cutoff=as.numeric(input$p.value),
+                   topgenes=as.numeric(input$markgeneN),
+                   color1=input$color2_2_1,
+                   color2=input$color1_2_1)
+      }
     })
     
     # observe({
@@ -117,7 +152,7 @@ shinyServer(
           paste(input$dataset2_1, "_expression_volcano",".pdf", sep = "")
         },
         content = function(file) {
-          pdf(file,width = 7, height = 6,compress = F)
+          pdf(file,width = 7, height = 6,compress = F)#family参数导出pdf设置字体:family="Arial"
           plot(volcano())
           dev.off()
         }
@@ -128,31 +163,31 @@ shinyServer(
       # 2.2 heatmap -------------------------------------------------------------
       
     
-      observeEvent(list(input$dataset2_2,input$Customize1==T),{
+      observeEvent(list(input$dataset2_2,input$Customize2_2==T),{
         load(paste("./data/gene/",isolate(input$dataset2_2),"_gene.Rdata",sep = ""))
         
         updateSelectizeInput(
           session,
-          inputId = "customize_genes",
+          inputId = "customize_genes2_2",
           choices = gene$`gene symbol`,
           selected = gene$`gene symbol`[1:10],
           server = T
         )
       })
       
-    observeEvent(list(input$dataset2_2,input$customize_genes), {
-      if (length(input$customize_genes) > 20) {
+    observeEvent(list(input$dataset2_2,input$customize_genes2_2), {
+      if (length(input$customize_genes2_2) > 20) {
         showFeedbackDanger(
-          inputId = "customize_genes",
+          inputId = "customize_genes2_2",
           text = "Warning, the number of genes is more than 20!",
           color  =  "#d9534f" ,
           icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
         )
         shinyjs::disable("submit2_2")
         #showToast('error', 'Danger if > 20 genes')
-      } else if(length(input$customize_genes) < 3){
+      } else if(length(input$customize_genes2_2) < 3){
         showFeedbackDanger(
-          inputId = "customize_genes",
+          inputId = "customize_genes2_2",
           text = "Warning, the number of genes is less than 3!",
           color  =  "#d9534f" ,
           icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
@@ -160,30 +195,29 @@ shinyServer(
         shinyjs::disable("submit2_2")
         #showToast('error', 'Danger if < 3 genes')
       }
-      else if(length(input$customize_genes)>=3 && length(input$customize_genes) <= 20){
-        hideFeedback("customize_genes")
+      else if(length(input$customize_genes2_2)>=3 && length(input$customize_genes2_2) <= 20){
+        hideFeedback("customize_genes2_2")
         #showToast('success', 'Success!')
         shinyjs::enable("submit2_2")
       }
       
     })
     
-  
-    
     heatmap<-eventReactive(input$submit2_2,{
-      
-      
-      
-      if(input$Customize1==T){
+      if(input$Customize2_2==T){
         my_heatmap(isolate(input$dataset2_2),
                    isolate(input$log2FC2),
                    customize=T,
-                   customizegenes=isolate(input$customize_genes))
+                   customizegenes=isolate(input$customize_genes2_2),
+                   color1=isolate(input$color1_2_2),
+                   color2=isolate(input$color2_2_2))
       }else{
         my_heatmap(isolate(input$dataset2_2),
                    isolate(input$log2FC2),
                    customize=F,
-                   topgenes=isolate(input$topgenes))
+                   topgenes=isolate(input$topgenes),
+                   color1=isolate(input$color1_2_2),
+                   color2=isolate(input$color2_2_2))
       }
       
     })
@@ -609,7 +643,9 @@ shinyServer(
     heatmap3_3_1<-eventReactive(input$submit3_3_1,{
       
         myssgseaheatmap(isolate(input$dataset3_3_1),
-                        isolate(input$pathway3_3))
+                        isolate(input$pathway3_3),
+                        isolate(input$color1_3_2_1),
+                        isolate(input$color2_3_2_1))
       
     })
     
@@ -744,7 +780,10 @@ shinyServer(
 
     
     heatmap4_2<-eventReactive(input$submit4_2,{
-      myimmuneheatmap(isolate(input$dataset4_2),isolate(input$algorithm2))
+      myimmuneheatmap(isolate(input$dataset4_2),
+                      isolate(input$algorithm2),
+                      isolate(input$color1_4_2),
+                      isolate(input$color2_4_2))
     })
     
     output$immuneheatmap<-renderPlot({
@@ -847,30 +886,30 @@ shinyServer(
 # 5.1 scattered diagram -----------------------------------------------------------------
 
 
-    Group1<-eventReactive(input$dataset5_1_1,{
+    Group1<-eventReactive(input$dataset5_1,{
 
       group<-read.table("./data/Group/group.txt",header=T,row.names=1)
-      str_split(string = group[isolate(input$dataset5_1_1),],pattern = " vs ")[[1]]
+      str_split(string = group[isolate(input$dataset5_1),],pattern = " vs ")[[1]]
     })
 
-    X5_1<-eventReactive(list(input$dataset5_1_1,
+    X5_1<-eventReactive(list(input$dataset5_1,
                              input$variable),{
       if(isolate(input$variable)=="pvp"){
-      load(paste("./Enrichment/ssgsea/",isolate(input$dataset5_1_1),"_ssgseapathway.Rdata",sep=""))
+      load(paste("./Enrichment/ssgsea/",isolate(input$dataset5_1),"_ssgseapathway.Rdata",sep=""))
       pathway$pathway
         }else{
-        load(paste("./data/gene/",isolate(input$dataset5_1_1),"_gene.Rdata",sep = ""))
+        load(paste("./data/gene/",isolate(input$dataset5_1),"_gene.Rdata",sep = ""))
         gene$`gene symbol`
       }
     })
 
-    Y5_1<-eventReactive(list(input$dataset5_1_1,
+    Y5_1<-eventReactive(list(input$dataset5_1,
                              input$variable),{
       if(isolate(input$variable)=="gvg"){
-      load(paste("./data/gene/",isolate(input$dataset5_1_1),"_gene.Rdata",sep = ""))
+      load(paste("./data/gene/",isolate(input$dataset5_1),"_gene.Rdata",sep = ""))
       gene$`gene symbol`
       }else{
-        load(paste("./Enrichment/ssgsea/",isolate(input$dataset5_1_1),"_ssgseapathway.Rdata",sep=""))
+        load(paste("./Enrichment/ssgsea/",isolate(input$dataset5_1),"_ssgseapathway.Rdata",sep=""))
         pathway$pathway
       }
     })
@@ -893,7 +932,7 @@ shinyServer(
 
     })
     
-    observeEvent(input$dataset5_1_1,{
+    observeEvent(input$dataset5_1,{
      # freezeReactiveValue(input, "group1")
       updateRadioButtons(
         session = session,
@@ -904,7 +943,7 @@ shinyServer(
       )
     })
     
-    observeEvent(list(input$dataset5_1_1,input$variable),{
+    observeEvent(list(input$dataset5_1,input$variable),{
 
       updateSelectizeInput(
         session = session,
@@ -957,7 +996,28 @@ shinyServer(
       }
 
     })
-    
+    scattergram<-eventReactive(input$submit5_1_1,{
+      if(input$group1=='All'){
+        myscattergram(dataset = isolate(input$dataset5_1),
+                      x = isolate(input$X5_1_1),
+                      y = isolate(input$Y5_1_1),
+                      variable = isolate(input$variable),
+                      cor_group = isolate(input$group1),
+                      method = isolate(input$method5_1_1),
+                      color1=isolate(input$color1_5_1),
+                      color2=isolate(input$color2_5_1)
+        )
+      }else{
+        myscattergram(dataset = isolate(input$dataset5_1),
+                      x = isolate(input$X5_1_1),
+                      y = isolate(input$Y5_1_1),
+                      variable = isolate(input$variable),
+                      cor_group = isolate(input$group1),
+                      method = isolate(input$method5_1_1),
+                      color3=isolate(input$color3_5_1)
+        )
+      }
+    })
     
     output$genevsgene<-renderPlot({
       shiny::validate(need(input$submit5_1_1,""))
@@ -973,50 +1033,39 @@ shinyServer(
         progress$set(value = i)
         Sys.sleep(0.1)
       }
-      myscattergram(dataset = isolate(input$dataset5_1_1),
-                    x = isolate(input$X5_1_1),
-                    y = isolate(input$Y5_1_1),
-                    variable = isolate(input$variable),
-                    cor_group = isolate(input$group1),
-                    method = isolate(input$method5_1_1)
-                    )
+      scattergram()
+      
     })
      
   
   
     output$pdf5_1_1 <- downloadHandler(
       filename = function() {
-        paste(input$dataset5_1_1, "_", 
+        paste(input$dataset5_1, "_", 
               input$X5_1_1,"vs",input$Y5_1_1,
               "_scattergram_",input$method5_1_1,"_",input$group1,".pdf",sep = "")
       },
       content = function(file) {
-        pdf(file,width = 7,height = 7,compress = F)
-        plot(myscattergram(dataset = isolate(input$dataset5_1_1),
-                           x = isolate(input$X5_1_1),
-                           y = isolate(input$Y5_1_1),
-                           variable = isolate(input$variable),
-                           cor_group = isolate(input$group1),
-                           method = isolate(input$method5_1_1)
-        ))
+        pdf(file,width = 7,height = 7,compress = F)#family参数导出pdf设置字体
+        plot(scattergram())
         dev.off()
       }
     )
 
 # 5.2 Heatmap-------------------------------------------------------------------
 
-    Gene2_1<-eventReactive(input$dataset5_2_1,{
-      load(paste("./data/gene/",isolate(input$dataset5_2_1),"_gene.Rdata",sep = ""))
+    Gene2_1<-eventReactive(input$dataset5_2,{
+      load(paste("./data/gene/",isolate(input$dataset5_2),"_gene.Rdata",sep = ""))
       gene$`gene symbol`
     })
     
-    Group2_1<-eventReactive(input$dataset5_2_1,{
+    Group2_1<-eventReactive(input$dataset5_2,{
       
       group<-read.table("./data/Group/group.txt",header=T,row.names=1)
-      str_split(string = group[isolate(input$dataset5_2_1),],pattern = " vs ")[[1]]
+      str_split(string = group[isolate(input$dataset5_2),],pattern = " vs ")[[1]]
     })
     
-    observeEvent(input$dataset5_2_1,{
+    observeEvent(input$dataset5_2,{
       updateSelectizeInput(
         session = session,
         inputId = "genes5_2_1",
@@ -1033,7 +1082,7 @@ shinyServer(
     })
         
     
-    observeEvent(input$genes5_2_1, {
+    observeEvent(list(input$dataset5_2,input$genes5_2_1), {
       if (length(input$genes5_2_1) < 5) {
         showFeedbackDanger(
           inputId = "genes5_2_1",
@@ -1072,7 +1121,7 @@ shinyServer(
         progress$set(value = i)
         Sys.sleep(0.1)
       } 
-      mycorbubble(isolate(input$dataset5_2_1),
+      mycorbubble(isolate(input$dataset5_2),
                    isolate(input$genes5_2_1),
                    isolate(input$group2_1),
                    isolate(input$method5_2_1))
@@ -1083,40 +1132,547 @@ shinyServer(
     
     output$pdf5_2_1 <- downloadHandler(
       filename = function() {
-        paste(input$dataset5_2_1, 
+        paste(input$dataset5_2, 
               "_genes_corheatmap_",input$method5_2_1,"_",input$group2_1,".pdf",sep = "")
       },
       content = function(file) {
         pdf(file,width = 11,height = 10,compress = F)
-        mycorbubble(isolate(input$dataset5_2_1),
+        mycorbubble(isolate(input$dataset5_2),
                           isolate(input$genes5_2_1),
                           isolate(input$group2_1),
                           isolate(input$method5_2_1))
         dev.off()
       }
     )
+# 6. singlecell -----------------------------------------------------------------
+    # 6.1 clusterplot -----------------------------------------------------------------
+    
+        output$clusterPlot<-renderPlot({
+      shiny::validate(need(input$submit6_1,""))
+      
+      
+      progress <- Progress$new(session, min=1, max=20)
+      on.exit(progress$close())
+      
+      progress$set(message = 'Making cluster plot',
+                   detail = 'This may take a while...')
+      
+      for (i in 1:20) {
+        progress$set(value = i)
+        Sys.sleep(0.1)
+      } 
+      load(paste("./scrna/data/",isolate(input$dataset6_1),".Rdata",sep = ""))
+      DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5,label.size = 6) + NoLegend()
+    })
+    output$pdf6_1 <- downloadHandler(
+      filename = function() {
+        paste(input$dataset6_1, 
+              "_singlecell_clusterplot_.pdf",sep = "")
+      },
+      content = function(file) {
+        pdf(file,width = 10,height = 7,compress = F)#family参数导出pdf设置字体
+        load(paste("./scrna/data/",isolate(input$dataset6_1),".Rdata",sep = ""))
+        DimPlot(pbmc, reduction = "umap", label = TRUE, pt.size = 0.5,label.size = 6) + NoLegend()
+        dev.off()
+      }
+    )
     
     
-# 6. Data -----------------------------------------------------------------
+    # 6.2 featureplot -----------------------------------------------------------------
+    
+    
+    
+    flabel<-eventReactive(input$featuretype,{
+      if(isolate(input$featuretype)=="pathway"){
+        "Select 1~4 pathway(s)"
+      }else{
+        "Select 1~9 gene(s)"
+      }
+
+    })
+    choice6_2<-eventReactive(list(input$dataset6_2,
+                             input$featuretype),{
+                               if(isolate(input$featuretype)=="gene"){
+                                 marker_exp <- read.table(paste0("./scrna/table/",isolate(input$dataset6_2),"_heatmap_gene.txt"),
+                                                          sep="\t",header=T)
+                                 rownames(marker_exp)
+                               }else{
+                                 gsva_mat <- read.table(paste0("./scrna/table/",isolate(input$dataset6_2),"_heatmap_pathway.txt"),
+                                                        sep="\t",header=T)
+                                 rownames(gsva_mat)
+                               }
+                             })
+    select6_2<-eventReactive(list(input$dataset6_2,
+                                  input$featuretype),{
+                                    if(isolate(input$featuretype)=="gene"){
+                                      if(input$dataset6_2=="GSE180885"){
+                                        c("GOLT1A","PRSS38","RNF223","IGKV1-39","WDR63","RGPD8","CD1C","COL11A1","SAMD11")
+                                      }else if(input$dataset6_2=="GSE213849_AD"){
+                                        c("PLEKHA7","TTLL10","TBC1D2","LGALSL","IGKC","STS","CCR1","HBA2","SOD3")
+                                      }else if(input$dataset6_2=="GSE158432"){
+                                        c("PEAK3","ADGRF4","HSD11B2","TRIM61","AQP10","SH2D6","FLT3","TRIM63","SGIP1")
+                                      }else {#input$dataset6_2=="GSE153760"
+                                        c("LINC02265","PLA2G2F","PLSCR2","TRIM54","RIIAD1","TUBB1","CLC","KLHL30","SHBG")
+                                      }
+                                    }else{
+                                      if(input$dataset6_2=="GSE180885"){
+                                        c("REACTOME-SEROTONIN-RECEPTORS",
+                                            "REACTOME-SYNTHESIS-OF-PE",
+                                            "REACTOME-DOPAMINE-RECEPTORS",
+                                            "REACTOME-COMPLEMENT-CASCADE"
+                                            # "KEGG-PROTEIN-EXPORT",
+                                            # "REACTOME-SARS-COV-INFECTIONS",
+                                            # "REACTOME-OPSINS",
+                                            # "REACTOME-ACTIVATION-OF-C3-AND-C5",
+                                            # "REACTOME-SIGNALING-BY-NOTCH1"
+                                        )
+                                      }else if(input$dataset6_2=="GSE213849_AD"){
+                                        c("KEGG-NEUROTROPHIN-SIGNALING-PATHWAY",
+                                          "REACTOME-INTERLEUKIN-7-SIGNALING",
+                                          "REACTOME-GLUCURONIDATION",
+                                          "KEGG-STEROID-HORMONE-BIOSYNTHESIS")
+                                      }else if(input$dataset6_2=="GSE158432"){
+                                        c("REACTOME-VASOPRESSIN-LIKE-RECEPTORS",
+                                          "REACTOME-VASOPRESSIN-LIKE-RECEPTORS")
+                                      }else {#input$dataset6_2=="GSE153760"
+                                        c("REACTOME-REGULATION-OF-HSF1-MEDIATED-HEAT-SHOCK-RESPONSE",
+                                          "KEGG-STEROID-HORMONE-BIOSYNTHESIS")
+                                      }
+                                    }
+                                  }
+    )
+    observeEvent(list(input$dataset6_2,input$featuretype),{
+      updateSelectizeInput(
+        session = session,
+        inputId = "feature6_2",
+        choices = choice6_2(),
+        selected = select6_2(),
+        label = flabel(),
+        server = T
+      )
+    }
+    )
+    # observeEvent(list(input$dataset6_2,input$featuretype),{
+    #   if(isolate(input$featuretype)=="gene"){
+    #     marker_exp<-read.table(paste("./scrna/table/",isolate(input$dataset6_2),"_heatmap_gene.txt",sep=""),
+    #                            header = T,sep = "\t")
+    #     scgenelist<-rownames(marker_exp)
+    #     if (input$dataset6_2=="GSE180885"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 gene(s)",
+    #                            choices = scgenelist,
+    #                            selected = c("GOLT1A","PRSS38","RNF223","IGKV1-39","WDR63","RGPD8","CD1C","COL11A1","SAMD11"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE213849_AD"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 gene(s)",
+    #                            choices = scgenelist,
+    #                            selected = c("PLEKHA7","TTLL10","TBC1D2","LGALSL","IGKC","STS","CCR1","HBA2","SOD3"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE158432"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 gene(s)",
+    #                            choices = scgenelist,
+    #                            selected = c("PEAK3","ADGRF4","HSD11B2","TRIM61","AQP10","SH2D6","FLT3","TRIM63","SGIP1"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE153760"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 gene(s)",
+    #                            choices = scgenelist,
+    #                            selected = c("LINC02265","PLA2G2F","PLSCR2","TRIM54","RIIAD1","TUBB1","CLC","KLHL30","SHBG"),
+    #                            server = TRUE)
+    #     }
+    #   }else{
+    #     gsva_mat<-read.table(paste("./scrna/table/",isolate(input$dataset6_2),"_heatmap_pathway.txt",sep=""),
+    #                          header = T,sep = "\t")
+    #     scpathwaylist<-rownames(gsva_mat)
+    #     if (input$dataset6_2=="GSE180885"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 pathway(s)",
+    #                            choices = scpathwaylist,
+    #                            selected = c("REACTOME-PHOSPHOLIPASE-C-MEDIATED-CASCADE-FGFR4",
+    #                                         "REACTOME-SYNTHESIS-OF-PE"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE213849_AD"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 pathway(s)",
+    #                            choices = scpathwaylist,
+    #                            selected = c("KEGG-NEUROTROPHIN-SIGNALING-PATHWAY",
+    #                                         "REACTOME-INTERLEUKIN-7-SIGNALING"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE158432"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",                                                          label = "Select 2~15 pathway(s)",
+    #                            label = "Select 1~9 pathway(s)",
+    #                            choices = scpathwaylist,
+    #                            selected = c("REACTOME-VASOPRESSIN-LIKE-RECEPTORS",
+    #                                         "REACTOME-VASOPRESSIN-LIKE-RECEPTORS"),
+    #                            server = TRUE)
+    #     }
+    #     else if (input$dataset6_2=="GSE153760"){
+    #       updateSelectizeInput(session = session,
+    #                            inputId = "feature6_2",
+    #                            label = "Select 1~9 pathway(s)",
+    #                            choices = scpathwaylist,
+    #                            selected = c("REACTOME-REGULATION-OF-HSF1-MEDIATED-HEAT-SHOCK-RESPONSE",
+    #                                         "KEGG-STEROID-HORMONE-BIOSYNTHESIS"),
+    #                            server = TRUE)
+    #     }
+    #   }
+    # })
+    # 
+    observeEvent(list(input$feature6_2,input$featuretype), {
+      if(input$featuretype=="gene"){
+      if (length(input$feature6_2) > 9) {
+        showFeedbackDanger(
+          inputId = "feature6_2",
+          text = "Warning, the number of genes is more than 9!",
+          color  =  "#d9534f" ,
+          icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+        )
+        shinyjs::disable("submit6_2")
+        
+      } else if(length(input$feature6_2) < 1){
+        showFeedbackDanger(
+          inputId = "feature6_2",
+          text = "Warning, the number of genes is less than 1!",
+          color  =  "#d9534f" ,
+          icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+        )
+        shinyjs::disable("submit6_2")
+      }
+      else if(length(input$feature6_2)>=1 && length(input$feature6_2) <= 9){
+        hideFeedback("feature6_2")
+        shinyjs::enable("submit6_2")
+      }
+      }else{
+        if (length(input$feature6_2) > 4) {
+          showFeedbackDanger(
+            inputId = "feature6_2",
+            text = "Warning, the number of pathways is more than 4!",
+            color  =  "#d9534f" ,
+            icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+          )
+          shinyjs::disable("submit6_2")
+          
+        } else if(length(input$feature6_2) < 1){
+          showFeedbackDanger(
+            inputId = "feature6_2",
+            text = "Warning, the number of pathways is less than 1!",
+            color  =  "#d9534f" ,
+            icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+          )
+          shinyjs::disable("submit6_2")
+        }
+        else if(length(input$feature6_2)>=1 && length(input$feature6_2) <= 4){
+          hideFeedback("feature6_2")
+          shinyjs::enable("submit6_2")
+        }
+      }
+      
+    })
+    
+    
+    output$featurePlot<-renderPlot({
+      shiny::validate(need(input$submit6_2,""))
+      
+      
+      progress <- Progress$new(session, min=1, max=20)
+      on.exit(progress$close())
+      
+      progress$set(message = 'Making feature plot',
+                   detail = 'This may take a while...')
+      
+      for (i in 1:20) {
+        progress$set(value = i)
+        Sys.sleep(0.1)
+      } 
+      load(paste("./scrna/data/",isolate(input$dataset6_2),".Rdata",sep = ""))
+      
+      FeaturePlot(pbmc, features=isolate(input$feature6_2))
+      
+    } )
+    # 6.3 heatmap -----------------------------------------------------------------
+    
+    # hlabel<-eventReactive(input$heatmaptype,{
+    #   if(isolate(input$heatmaptype)=="pathway"){
+    #     "Select 1~9 pathway(s)"
+    #   }else{
+    #     "Select 1~9 gene(s)"
+    #   }
+    #   
+    # })
+    #X6_3<-eventReactive
+    observeEvent(list(input$dataset6_3,input$heatmaptype),{
+                               if(isolate(input$heatmaptype)=="gene"){
+                                 marker_exp<-read.table(paste("./scrna/table/",isolate(input$dataset6_3),"_heatmap_gene.txt",sep=""),
+                                                        header = T,sep = "\t")
+                                 scgenelist<-rownames(marker_exp)
+                                 if (input$dataset6_3=="GSE180885"){
+                                   updateSelectizeInput(session = session,
+                                                        inputId = "heatmap6_3",
+                                                        label = "Select 2~15 gene(s)",
+                                                        choices = scgenelist,
+                                                        selected = c("GOLT1A","PRSS38","RNF223","IGKV1-39","WDR63","RGPD8","CD1C","COL11A1","SAMD11"),
+                                                        server = TRUE)
+                                 }
+                                 else if (input$dataset6_3=="GSE213849_AD"){
+                                   updateSelectizeInput(session = session,
+                                                        inputId = "heatmap6_3",
+                                                        label = "Select 2~15 gene(s)",
+                                                        choices = scgenelist,
+                                                        selected = c("PLEKHA7","TTLL10","TBC1D2","LGALSL","IGKC","STS","CCR1","HBA2","SOD3"),
+                                                        server = TRUE)
+                                 }
+                                 else if (input$dataset6_3=="GSE158432"){
+                                   updateSelectizeInput(session = session,
+                                                        inputId = "heatmap6_3",
+                                                        label = "Select 2~15 gene(s)",
+                                                        choices = scgenelist,
+                                                        selected = c("PEAK3","ADGRF4","HSD11B2","TRIM61","AQP10","SH2D6","FLT3","TRIM63","SGIP1"),
+                                                        server = TRUE)
+                                 }
+                                 else if (input$dataset6_3=="GSE153760"){
+                                   updateSelectizeInput(session = session,
+                                                        inputId = "heatmap6_3",
+                                                        label = "Select 2~15 gene(s)",
+                                                        choices = scgenelist,
+                                                        selected = c("LINC02265","PLA2G2F","PLSCR2","TRIM54","RIIAD1","TUBB1","CLC","KLHL30","SHBG"),
+                                                        server = TRUE)
+                                 }
+                               }else{
+                                 gsva_mat<-read.table(paste("./scrna/table/",isolate(input$dataset6_3),"_heatmap_pathway.txt",sep=""),
+                                                        header = T,sep = "\t")
+                                 scpathwaylist<-rownames(gsva_mat)
+                                 if (input$dataset6_3=="GSE180885"){
+                                     updateSelectizeInput(session = session,
+                                                          inputId = "heatmap6_3",
+                                                          label = "Select 2~15 pathway(s)",
+                                                          choices = scpathwaylist,
+                                                          selected = c("REACTOME-SEROTONIN-RECEPTORS",
+                                                                       "REACTOME-SYNTHESIS-OF-PE",
+                                                                       "REACTOME-DOPAMINE-RECEPTORS",
+                                                                       "REACTOME-COMPLEMENT-CASCADE",
+                                                                       "KEGG-PROTEIN-EXPORT",
+                                                                       "REACTOME-SARS-COV-INFECTIONS",
+                                                                       "REACTOME-OPSINS",
+                                                                       "REACTOME-ACTIVATION-OF-C3-AND-C5",
+                                                                       "REACTOME-SIGNALING-BY-NOTCH1"
+                                                          ),
+                                                          server = TRUE)
+                                   }
+                                   else if (input$dataset6_3=="GSE213849_AD"){
+                                     updateSelectizeInput(session = session,
+                                                          inputId = "heatmap6_3",
+                                                          label = "Select 2~15 pathway(s)",
+                                                          choices = scpathwaylist,
+                                                          selected = c("KEGG-NEUROTROPHIN-SIGNALING-PATHWAY",
+                                                                       "REACTOME-FREE-FATTY-ACID-RECEPTORS",
+                                                                       "REACTOME-INTERLEUKIN-7-SIGNALING",
+                                                                       "REACTOME-METALLOPROTEASE-DUBS",
+                                                                       "REACTOME-GLUCURONIDATION",
+                                                                       "KEGG-FOLATE-BIOSYNTHESIS",
+                                                                       "KEGG-STEROID-HORMONE-BIOSYNTHESIS",
+                                                                       "REACTOME-GLUTATHIONE-CONJUGATION",
+                                                                       "REACTOME-COMPLEMENT-CASCADE",
+                                                                       "REACTOME-ECM-PROTEOGLYCANS"
+                                                                       ),
+                                                          server = TRUE)
+                                   }
+                                   else if (input$dataset6_3=="GSE158432"){
+                                     updateSelectizeInput(session = session,
+                                                          inputId = "heatmap6_3",     
+                                                          label = "Select 2~15 pathway(s)",
+                                                          choices = scpathwaylist,
+                                                          selected = c("REACTOME-CARNITINE-METABOLISM",
+                                                                       "KEGG-RETINOL-METABOLISM",
+                                                                       "KEGG-BUTANOATE-METABOLISM",
+                                                                       "KEGG-REGULATION-OF-AUTOPHAGY",
+                                                                       "KEGG-OXIDATIVE-PHOSPHORYLATION",
+                                                                       "KEGG-RIBOFLAVIN-METABOLISM",
+                                                                       "REACTOME-DOPAMINE-RECEPTORS",
+                                                                       "KEGG-GLYCEROLIPID-METABOLISM",
+                                                                       "REACTOME-PI3K-AKT-ACTIVATION",
+                                                                       "REACTOME-MELANIN-BIOSYNTHESIS"),
+                                                          server = TRUE)
+                                   }
+                                   else if (input$dataset6_3=="GSE153760"){
+                                     updateSelectizeInput(session = session,
+                                                          inputId = "heatmap6_3",
+                                                          label = "Select 2~15 pathway(s)",
+                                                          choices = scpathwaylist,
+                                                          selected = c("REACTOME-CHROMATIN-MODIFYING-ENZYMES",
+                                                                      "REACTOME-KERATINIZATION",
+                                                                      "HALLMARK-INFLAMMATORY-RESPONSE",
+                                                                      "REACTOME-CD22-MEDIATED-BCR-REGULATION",
+                                                                      "REACTOME-MELANIN-BIOSYNTHESIS",
+                                                                      "HALLMARK-MITOTIC-SPINDLE",
+                                                                      "REACTOME-CELLULAR-HEXOSE-TRANSPORT",
+                                                                      "REACTOME-GLUCURONIDATION",
+                                                                      "REACTOME-RHO-GTPASES-ACTIVATE-CIT",
+                                                                      "REACTOME-TRNA-AMINOACYLATION"
+                                                                      ),
+                                                          server = TRUE)
+                                   }
+                               }
+                             })
+    # observeEvent(list(input$dataset6_3,input$heatmaptype),{
+    #   
+    #   updateSelectizeInput(
+    #     session = session,
+    #     inputId = "heatmap6_3",
+    #     choices = X6_3(),
+    #     selected = X6_3()[1:9],
+    #     label = hlabel(),
+    #     server = T
+    #   )
+    # }
+    # )
+    observeEvent(list(input$heatmaptype,input$heatmap6_3), {
+      if (length(input$heatmap6_3) > 15) {
+        if(isolate(input$heatmaptype)=="gene"){
+          showFeedbackDanger(
+            inputId = "heatmap6_3",
+            text = "Warning, the number of genes is more than 15!",
+            color  =  "#d9534f" ,
+            icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+          )
+        } else{
+          showFeedbackDanger(
+            inputId = "heatmap6_3",
+            text = "Warning, the number of pathways is more than 15!",
+            color  =  "#d9534f" ,
+            icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+          )
+        }
+        
+        shinyjs::disable("submit6_3")
+        
+      } else if(length(input$heatmap6_3) < 2){
+        if(isolate(input$heatmaptype)=="gene"){
+        showFeedbackDanger(
+          inputId = "heatmap6_3",
+          text = "Warning, the number of genes is less than 2!",
+          color  =  "#d9534f" ,
+          icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+        )
+        } else{
+          showFeedbackDanger(
+            inputId = "heatmap6_3",
+            text = "Warning, the number of pathways is less than 2!",
+            color  =  "#d9534f" ,
+            icon  =  shiny::icon ("exclamation-sign" ,  lib  =  "glyphicon")
+          )
+        }
+        shinyjs::disable("submit6_3")
+      }
+      else if(length(input$heatmap6_3)>=2 && length(input$heatmap6_3) <= 15){
+        hideFeedback("heatmap6_3")
+        shinyjs::enable("submit6_3")
+      }
+    })
+    
+    matrix6_3<-eventReactive(list(input$dataset6_3,
+                                    input$heatmaptype),{
+      if(input$heatmaptype=="gene") {
+      matrix<-read.table(paste("./scrna/table/",isolate(input$dataset6_3),"_heatmap_gene.txt",sep=""),
+                         header = T,sep = "\t")
+      matrix<-as.matrix(matrix)
+    } else{
+      matrix<-read.table(paste("./scrna/table/",isolate(input$dataset6_3),"_heatmap_pathway.txt",sep="")
+                         ,header = T,sep = "\t")
+      matrix<-as.matrix(matrix)
+    }
+                                    }
+    )
+    
+    output$SCheatmap<-renderPlot({
+      shiny::validate(need(input$submit6_3,""))
+      
+      
+      progress <- Progress$new(session, min=1, max=20)
+      on.exit(progress$close())
+      
+      progress$set(message = 'Making heatmap',
+                   detail = 'This may take a while...')
+      
+      for (i in 1:20) {
+        progress$set(value = i)
+        Sys.sleep(0.1)
+      } 
+      
+      Heatmap(matrix = matrix6_3()[isolate(input$heatmap6_3),],
+              name = "z-score \nexpression  ", 
+              col = colorRamp2(
+                c(-2, 0, 2), 
+                c("royalblue","white","firebrick3")
+              ),
+              row_names_max_width = max_text_width(
+                rownames(matrix6_3()), 
+                gp = gpar(fontsize = 12)),
+              column_title = paste0("Heatmap of ",isolate(input$dataset6_3)), 
+              column_title_gp = gpar(fontsize = 15, fontface = "bold"),
+              rect_gp = gpar(col = "white", lwd = 0.2),
+              cluster_rows = F,
+              cluster_columns = F,
+              column_names_side = "top",
+              column_names_rot = 45,
+              na_col = "white")
+      
+    } )
+    
+   
+    
+    
+    
+# 7. Data -----------------------------------------------------------------
 
     DataX <- reactive({ 
-      data <- read.table("./data/data.txt",header=T,row.names=1,encoding = "UTF-8")
-      data})
+      data <- read.table("./data/data1.txt",header=T,row.names=1,fileEncoding = "UTF-8")
+      data<-data[,-c(5,10:13)]
+      data<-as.data.frame(data)
+      data<-data%>%mutate(Species = as.factor(Species)) %>% 
+        mutate(Disease = as.factor(Disease)) %>% 
+        mutate(Tissue.type = as.factor(Tissue.type))%>% 
+        mutate(Sequencing.type = as.factor(Sequencing.type))
+      data
+      })
     
       output$data_i<-renderUI({#用renderUI可以避免用extensions = Responsive时不同页面上显示列数不同的问题
         data<-DataX()
-        data<-data[,-(5:6)]
-        data<-dplyr::rename(data, Publication=url)
+        
+        #data<-dplyr::rename(data, Publication=url)
         DT::datatable(data,escape = FALSE,
-                      extensions = c('Buttons','Responsive'), 
+                      filter = c("top"),
+                      extensions = c('Buttons'), #,'Responsive'
                       options = list(
           dom = 'Bfrtip',
           buttons = 'csv',
-          initComplete = JS(
+          columnDefs = list(list(targets = c(7,8), searchable = FALSE),
+                            list(
+                              targets = c(7,8),
+                              render = DT::JS(
+                                "function(data, type, row, meta) {",
+                                "return type === 'display' && data != null && data.length > 25 ?",
+                                "'<span title=\"' + data + '\">' + data.substr(0, 25) + '...</span>' : data;",
+                                "}")
+                            )),
+          initComplete = DT::JS(
             "function(settings, json) {",
             "$(this.api().table().header()).css({'background-color': '#8f8f8f', 'color': '#fff'});",
             "}")
-          #columnDefs = list(list(visible=FALSE, targets=c(6,7)))#隐藏特定的列
+          #columnDefs = list(list(visible=FALSE, targets=c(7,8)))#隐藏特定的列
         ))
       })
     # output$download6 <- downloadHandler(
@@ -1128,7 +1684,39 @@ shinyServer(
     #   }
     # )
     
-#      7. About -------
+#8.integrated data-----
+      Integrated_disease_DTdata <- eventReactive(input$Integrated_disease_input,{
+        load(paste0("./data/IntegratedDT/", gsub(" ", "_", input$Integrated_disease_input), ".Rdata"))
+        as.data.frame(Integrated_summaryDT)
+      })
+      
+      output$Integrated_DT <- renderDataTable({
+        DT::datatable(Integrated_disease_DTdata(),
+                      rownames = FALSE,
+                      extensions = c("FixedColumns"),
+                      selection = "none", #turn off row selection function otherwise u will select that row when clicking on the action button
+                      options = list(pageLength = 10,
+                                     scrollX = TRUE,
+                                     # autoWidth = TRUE,
+                                     fixedColumns = list(leftColumns = 3), #the first column is 1. 3 here means fix column after column 3.
+                                     searchHighlight = TRUE,
+                                     search = list(regex = FALSE, caseInsensitive = TRUE),
+                                     columnDefs = list(list(className = 'dt-center', targets = "_all")))
+        ) %>% 
+          formatStyle(columns = seq(from = 4, to = ncol(Integrated_disease_DTdata())),
+                      color = styleEqual(c(0, 1, -1), c('black', 'red', 'blue')))
+      })
+      
+      output$Integrated_Download <- downloadHandler(
+        filename = function() {
+          paste0(input$Integrated_disease_input, "_Integrated_DEG_Summary", ".csv")
+        },
+        content <- function(file) {
+          sep <- ","
+          write.table(Integrated_disease_DTdata(), file, sep=sep, row.names = FALSE)
+        }
+      )
+#      9. About -------
     
       output$attachment <- renderUI({
         fileInput("attach_pic", "Upload a PNG/JPGE File (optional)",
@@ -1138,11 +1726,11 @@ shinyServer(
                   accept = c("image/png","image/jpeg"))
       })
       observe({
-        shinyjs::toggleState(id ="submit7",
+        shinyjs::toggleState(id ="submit8",
                              condition =(input$comment!=""))
       })
       # action to take when submit button is pressed
-      observeEvent(input$submit7, {
+      observeEvent(input$submit8, {
         req(input$comment)
         smtp <- emayili::server(
           host = "smtp.163.com",
@@ -1174,6 +1762,8 @@ shinyServer(
           type = "success"
         )
       })
+      
+
     
   }
 )
